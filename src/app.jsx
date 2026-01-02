@@ -1,4 +1,4 @@
-/* BURAYA ARTIFACT KODUNU YAPIŞTIRIN - artifact'taki import satırlarını SİLİN */
+import React from 'react';
 
 const translations = {
   tr: {
@@ -227,7 +227,7 @@ const Save = (props) => null;
 const X = (props) => null;
 const Check = (props) => null;
 
-const HolidayPlannerApp = () => {
+const App = () => {
   const [country, setCountry] = useState('TR');
   const [language, setLanguage] = useState('tr');
   const [year, setYear] = useState(2026);
@@ -769,6 +769,4 @@ const HolidayPlannerApp = () => {
   );
 };
 
-// En sona şunu ekleyin:
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<HolidayPlannerApp />);
+export default App;
