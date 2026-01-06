@@ -7,9 +7,6 @@ const translations = {
     language: 'Dil',
     year: 'Yıl',
     annualLeave: 'Yıllık İzin Günü',
-    leaveUsageTarget: 'Hedef İzin Kullanımı',
-    minPercent: 'Min %',
-    maxPercent: 'Max %',
     calculate: 'Hesapla',
     optimalPlan: 'Seçili Plan',
     alternativePlans: 'Alternatif Planlar',
@@ -42,9 +39,6 @@ const translations = {
     language: 'Language',
     year: 'Year',
     annualLeave: 'Annual Leave Days',
-    leaveUsageTarget: 'Target Leave Usage',
-    minPercent: 'Min %',
-    maxPercent: 'Max %',
     calculate: 'Calculate',
     optimalPlan: 'Selected Plan',
     alternativePlans: 'Alternative Plans',
@@ -238,8 +232,6 @@ const App = () => {
   const [language, setLanguage] = useState('tr');
   const [year, setYear] = useState(2026);
   const [annualLeave, setAnnualLeave] = useState(14);
-  const [minLeavePercent, setMinLeavePercent] = useState(70);
-  const [maxLeavePercent, setMaxLeavePercent] = useState(90);
   const [calculated, setCalculated] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [exclusionMode, setExclusionMode] = useState(false);
@@ -399,12 +391,10 @@ const App = () => {
     if (opportunities.length === 0) return [];
     
     const plans = [];
-    const minLeave = Math.floor(annualLeave * minLeavePercent / 100);
-    const maxLeave = Math.ceil(annualLeave * maxLeavePercent / 100);
     
     // Her olası kombinasyon için plan oluştur
     const generatePlans = (currentPlan, remainingOpps, usedDates, totalLeave) => {
-      if (totalLeave >= minLeave && totalLeave <= maxLeave) {
+      if (totalLeave >= 1 && totalLeave <= annualLeave) {
         const totalDays = currentPlan.reduce((sum, opp) => sum + opp.totalDays, 0);
         const planLeave = currentPlan.reduce((sum, opp) => sum + opp.leaveDays, 0);
         plans.push({
@@ -416,13 +406,13 @@ const App = () => {
         });
       }
       
-      if (totalLeave >= maxLeave) return;
+      if (totalLeave >= annualLeave) return;
       
       for (let i = 0; i < remainingOpps.length; i++) {
         const opp = remainingOpps[i];
         const hasConflict = opp.dates.some(date => usedDates.has(date));
         
-        if (!hasConflict && totalLeave + opp.leaveDays <= maxLeave) {
+        if (!hasConflict && totalLeave + opp.leaveDays <= annualLeave) {
           const newUsedDates = new Set([...usedDates, ...opp.dates]);
           generatePlans(
             [...currentPlan, opp],
@@ -445,7 +435,7 @@ const App = () => {
         return b.efficiency - a.efficiency;
       })
       .slice(0, 10); // İlk 10 plan
-  }, [opportunities, annualLeave, minLeavePercent, maxLeavePercent]);
+  }, [opportunities, annualLeave]);
 
   const selectedPlan = useMemo(() => {
     if (allPlans.length === 0) return null;
@@ -726,34 +716,6 @@ const App = () => {
                     min="1"
                     max="30"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">{t.leaveUsageTarget}</label>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <input 
-                        type="number" 
-                        value={minLeavePercent} 
-                        onChange={(e) => { setMinLeavePercent(Number(e.target.value)); setCalculated(false); setSelectedPlanIndex(null); }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-                        min="0"
-                        max="100"
-                        placeholder={t.minPercent}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <input 
-                        type="number" 
-                        value={maxLeavePercent} 
-                        onChange={(e) => { setMaxLeavePercent(Number(e.target.value)); setCalculated(false); setSelectedPlanIndex(null); }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-                        min="0"
-                        max="100"
-                        placeholder={t.maxPercent}
-                      />
-                    </div>
-                  </div>
                 </div>
               </div>
 
