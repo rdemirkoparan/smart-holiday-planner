@@ -17,11 +17,14 @@ const translations = {
     getTotalDays: 'gün tatil yap',
     days: 'gün',
     editHolidays: 'Tatil Günlerini Düzenle',
+    manageExclusions: 'İzin Kullanılamayacak Günler',
     saveChanges: 'Değişiklikleri Kaydet',
     cancel: 'İptal',
     addHoliday: 'Tatil Ekle',
+    addExclusion: 'Hariç Tutulan Gün Ekle',
     date: 'Tarih',
     holidayName: 'Tatil Adı',
+    exclusionReason: 'Hariç Tutma Nedeni',
     type: 'Tip',
     official: 'Resmi',
     religious: 'Dini',
@@ -49,11 +52,14 @@ const translations = {
     getTotalDays: 'get total days',
     days: 'days',
     editHolidays: 'Edit Holidays',
+    manageExclusions: 'Days When Leave Cannot Be Used',
     saveChanges: 'Save Changes',
     cancel: 'Cancel',
     addHoliday: 'Add Holiday',
+    addExclusion: 'Add Excluded Date',
     date: 'Date',
     holidayName: 'Holiday Name',
+    exclusionReason: 'Exclusion Reason',
     type: 'Type',
     official: 'Official',
     religious: 'Religious',
@@ -236,8 +242,11 @@ const App = () => {
   const [maxLeavePercent, setMaxLeavePercent] = useState(90);
   const [calculated, setCalculated] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [exclusionMode, setExclusionMode] = useState(false);
   const [holidayData, setHolidayData] = useState(defaultHolidayData);
   const [editedHolidays, setEditedHolidays] = useState([]);
+  const [excludedDates, setExcludedDates] = useState([]);
+  const [editedExclusions, setEditedExclusions] = useState([]);
   const [selectedPlanIndex, setSelectedPlanIndex] = useState(null);
 
   const t = translations[language];
@@ -277,6 +286,7 @@ const App = () => {
   const calculateBridgeOpportunities = () => {
     const opportunities = [];
     const holidaySet = new Set(currentHolidays.map(h => h.date));
+    const exclusionSet = new Set(excludedDates.map(e => e.date));
     
     currentHolidays.forEach((holiday, idx) => {
       const holidayDay = getDayOfWeek(holiday.date);
@@ -285,7 +295,7 @@ const App = () => {
       if (holidayDay === 4) {
         // Cuma + hafta sonu = 4 gün
         const nextMonday = addDays(holiday.date, 4);
-        if (!holidaySet.has(addDays(holiday.date, 1))) {
+        if (!holidaySet.has(addDays(holiday.date, 1)) && !exclusionSet.has(addDays(holiday.date, 1))) {
           opportunities.push({
             type: 'thursday_bridge',
             holiday: holiday,
@@ -296,7 +306,8 @@ const App = () => {
         }
         
         // Cuma + Pazartesi-Çarşamba = 7 gün
-        if (!holidaySet.has(addDays(holiday.date, 1)) && !holidaySet.has(nextMonday)) {
+        if (!holidaySet.has(addDays(holiday.date, 1)) && !holidaySet.has(nextMonday) && 
+            !exclusionSet.has(addDays(holiday.date, 1)) && !exclusionSet.has(nextMonday)) {
           opportunities.push({
             type: 'thursday_extended',
             holiday: holiday,
@@ -308,7 +319,7 @@ const App = () => {
       }
       
       // Salı tatil - Pazartesi alarak 4 gün
-      if (holidayDay === 2 && !holidaySet.has(addDays(holiday.date, -1))) {
+      if (holidayDay === 2 && !holidaySet.has(addDays(holiday.date, -1)) && !exclusionSet.has(addDays(holiday.date, -1))) {
         opportunities.push({
           type: 'tuesday_bridge',
           holiday: holiday,
@@ -322,7 +333,7 @@ const App = () => {
       if (holidayDay === 1) {
         const tuesday = addDays(holiday.date, 1);
         const friday = addDays(holiday.date, 4);
-        if (!holidaySet.has(tuesday)) {
+        if (!holidaySet.has(tuesday) && !exclusionSet.has(tuesday)) {
           opportunities.push({
             type: 'monday_extended',
             holiday: holiday,
@@ -336,7 +347,7 @@ const App = () => {
       // Cuma tatil - Pazartesi-Perşembe alarak 9 gün
       if (holidayDay === 5) {
         const monday = addDays(holiday.date, -4);
-        if (!holidaySet.has(monday)) {
+        if (!holidaySet.has(monday) && !exclusionSet.has(monday)) {
           opportunities.push({
             type: 'friday_extended',
             holiday: holiday,
@@ -354,14 +365,14 @@ const App = () => {
         
         if (daysDiff >= 2 && daysDiff <= 10) {
           const allDates = getDateRange(holiday.date, nextHoliday.date);
-          const workDaysNeeded = allDates.filter(d => !isWeekend(d) && !holidaySet.has(d)).length;
+          const workDaysNeeded = allDates.filter(d => !isWeekend(d) && !holidaySet.has(d) && !exclusionSet.has(d)).length;
           
           if (workDaysNeeded > 0 && workDaysNeeded <= 5) {
             // Haftasonu öncesi ve sonrası günleri de dahil et
             const firstDate = addDays(holiday.date, getDayOfWeek(holiday.date) === 5 ? 0 : -1);
             const lastDate = addDays(nextHoliday.date, getDayOfWeek(nextHoliday.date) === 1 ? 0 : 1);
             const extendedDates = getDateRange(firstDate, lastDate);
-            const extendedWorkDays = extendedDates.filter(d => !isWeekend(d) && !holidaySet.has(d)).length;
+            const extendedWorkDays = extendedDates.filter(d => !isWeekend(d) && !holidaySet.has(d) && !exclusionSet.has(d)).length;
             
             opportunities.push({
               type: 'consecutive',
@@ -382,7 +393,7 @@ const App = () => {
   const opportunities = useMemo(() => {
     if (!calculated) return [];
     return calculateBridgeOpportunities();
-  }, [currentHolidays, calculated]);
+  }, [currentHolidays, calculated, excludedDates]);
 
   const allPlans = useMemo(() => {
     if (opportunities.length === 0) return [];
@@ -476,6 +487,34 @@ const App = () => {
     setEditedHolidays(editedHolidays.filter((_, i) => i !== idx));
   };
 
+  const startExclusionMode = () => {
+    setEditedExclusions(JSON.parse(JSON.stringify(excludedDates)));
+    setExclusionMode(true);
+  };
+
+  const saveEditedExclusions = () => {
+    setExcludedDates(editedExclusions.sort((a, b) => new Date(a.date) - new Date(b.date)));
+    setExclusionMode(false);
+    setCalculated(false);
+  };
+
+  const updateExclusionField = (idx, field, value) => {
+    const updated = [...editedExclusions];
+    updated[idx][field] = value;
+    setEditedExclusions(updated);
+  };
+
+  const addExclusion = () => {
+    setEditedExclusions([...editedExclusions, {
+      date: `${year}-01-01`,
+      reason: language === 'tr' ? 'Yeni Hariç Tutma' : 'New Exclusion'
+    }]);
+  };
+
+  const removeExclusion = (idx) => {
+    setEditedExclusions(editedExclusions.filter((_, i) => i !== idx));
+  };
+
   const selectPlan = (index) => {
     setSelectedPlanIndex(index);
   };
@@ -489,7 +528,153 @@ const App = () => {
             <h1 className="text-3xl font-bold text-gray-800">{t.title}</h1>
           </div>
 
-          {!editMode ? (
+          {editMode ? (
+            <>
+              <div className="mb-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold text-gray-800">{t.editHolidays}</h2>
+                <button 
+                  onClick={addHoliday}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  {t.addHoliday}
+                </button>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto mb-4 space-y-3">
+                {editedHolidays.map((holiday, idx) => (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t.date}</label>
+                        <input 
+                          type="date"
+                          value={holiday.date}
+                          onChange={(e) => updateHolidayField(idx, 'date', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t.holidayName}</label>
+                        <input 
+                          type="text"
+                          value={holiday.name[language]}
+                          onChange={(e) => updateHolidayField(idx, 'name', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">{t.type}</label>
+                          <select 
+                            value={holiday.type}
+                            onChange={(e) => updateHolidayField(idx, 'type', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          >
+                            <option value="official">{t.official}</option>
+                            <option value="religious">{t.religious}</option>
+                          </select>
+                        </div>
+                        <div className="flex items-end">
+                          <button 
+                            onClick={() => removeHoliday(idx)}
+                            className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition flex items-center justify-center"
+                            title={t.actions}
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={saveEditedHolidays}
+                  className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2"
+                >
+                  <Save className="w-5 h-5" />
+                  {t.saveChanges}
+                </button>
+                <button 
+                  onClick={() => setEditMode(false)}
+                  className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition flex items-center gap-2"
+                >
+                  <X className="w-5 h-5" />
+                  {t.cancel}
+                </button>
+              </div>
+            </>
+          ) : exclusionMode ? (
+            // Exclusion mode
+            <>
+              <div className="mb-4 flex justify-between items-center">
+                <h2 className="text-xl font-bold text-gray-800">{t.manageExclusions}</h2>
+                <button 
+                  onClick={addExclusion}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition flex items-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  {t.addExclusion}
+                </button>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto mb-4 space-y-3">
+                {editedExclusions.map((exclusion, idx) => (
+                  <div key={idx} className="p-4 bg-red-50 rounded-lg border border-red-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t.date}</label>
+                        <input 
+                          type="date"
+                          value={exclusion.date}
+                          onChange={(e) => updateExclusionField(idx, 'date', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t.exclusionReason}</label>
+                        <input 
+                          type="text"
+                          value={exclusion.reason}
+                          onChange={(e) => updateExclusionField(idx, 'reason', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                          placeholder={t.exclusionReason}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <button 
+                        onClick={() => removeExclusion(idx)}
+                        className="text-red-600 hover:text-red-800 p-1"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={saveEditedExclusions}
+                  className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition flex items-center justify-center gap-2"
+                >
+                  <Save className="w-5 h-5" />
+                  {t.saveChanges}
+                </button>
+                <button 
+                  onClick={() => setExclusionMode(false)}
+                  className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition flex items-center gap-2"
+                >
+                  <X className="w-5 h-5" />
+                  {t.cancel}
+                </button>
+              </div>
+            </>
+          ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 <div>
@@ -587,84 +772,12 @@ const App = () => {
                   <Edit2 className="w-5 h-5" />
                   {t.editHolidays}
                 </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="mb-4 flex justify-between items-center">
-                <h2 className="text-xl font-bold text-gray-800">{t.editHolidays}</h2>
                 <button 
-                  onClick={addHoliday}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition flex items-center gap-2"
-                >
-                  <Plus className="w-5 h-5" />
-                  {t.addHoliday}
-                </button>
-              </div>
-
-              <div className="max-h-96 overflow-y-auto mb-4 space-y-3">
-                {editedHolidays.map((holiday, idx) => (
-                  <div key={idx} className="p-4 bg-gray-50 rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">{t.date}</label>
-                        <input 
-                          type="date"
-                          value={holiday.date}
-                          onChange={(e) => updateHolidayField(idx, 'date', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">{t.holidayName}</label>
-                        <input 
-                          type="text"
-                          value={holiday.name[language]}
-                          onChange={(e) => updateHolidayField(idx, 'name', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">{t.type}</label>
-                          <select 
-                            value={holiday.type}
-                            onChange={(e) => updateHolidayField(idx, 'type', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                          >
-                            <option value="official">{t.official}</option>
-                            <option value="religious">{t.religious}</option>
-                          </select>
-                        </div>
-                        <div className="flex items-end">
-                          <button 
-                            onClick={() => removeHoliday(idx)}
-                            className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition flex items-center justify-center"
-                            title={t.actions}
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-3">
-                <button 
-                  onClick={saveEditedHolidays}
-                  className="flex-1 bg-indigo-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-indigo-700 transition flex items-center justify-center gap-2"
-                >
-                  <Save className="w-5 h-5" />
-                  {t.saveChanges}
-                </button>
-                <button 
-                  onClick={() => setEditMode(false)}
-                  className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition flex items-center gap-2"
+                  onClick={startExclusionMode}
+                  className="bg-red-100 text-red-700 px-6 py-3 rounded-lg font-medium hover:bg-red-200 transition flex items-center gap-2"
                 >
                   <X className="w-5 h-5" />
-                  {t.cancel}
+                  {t.manageExclusions}
                 </button>
               </div>
             </>
